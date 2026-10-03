@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Papan Skor Cerdas Cermat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS untuk sinkronisasi Operator -> Layar Penonton secara real-time -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- QR Code untuk memudahkan penonton membuka layar skor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- SheetJS untuk ekspor Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js untuk grafik hasil lomba -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #020b1e;
+            color: #ffffff;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        .font-digital {
+            font-family: 'Orbitron', monospace;
+        }
+
+        /* High tech glowing arena background */
+        .stage-bg {
+            background: radial-gradient(circle at 50% 20%, #1e3c72 0%, #0a192f 50%, #020813 100%);
+            box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Glowing text effects */
+        .text-glow-yellow {
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.7), 0 0 20px rgba(255, 165, 0, 0.5), 0 0 30px rgba(255, 140, 0, 0.3);
+        }
+
+        .text-glow-blue {
+            text-shadow: 0 0 12px rgba(59, 130, 246, 0.8), 0 0 25px rgba(37, 99, 235, 0.6);
+        }
+
+        .text-glow-timer {
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.9), 0 0 30px rgba(59, 130, 246, 0.8);
+        }
+
+        /* 3D Skeuomorphic/Neon Game Buttons */
+        .btn-3d {
+            transition: all 0.1s ease;
+            box-shadow: 0 6px 0 rgba(0,0,0,0.4), 0 8px 15px rgba(0,0,0,0.3);
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 rgba(0,0,0,0.4), 0 3px 6px rgba(0,0,0,0.3);
+        }
+
+        /* Team Card Border & Glow Styles */
+        .team-card {
+            border-width: 4px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .team-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .team-regu-1 { border-color: #ef4444; background: linear-gradient(180deg, #2b0b0e 0%, #170507 100%); }
+        .team-regu-2 { border-color: #3b82f6; background: linear-gradient(180deg, #0b1a3a 0%, #050d21 100%); }
+        .team-regu-3 { border-color: #eab308; background: linear-gradient(180deg, #362907 0%, #1c1503 100%); }
+        .team-regu-4 { border-color: #22c55e; background: linear-gradient(180deg, #092c15 0%, #03170a 100%); }
+        .team-regu-5 { border-color: #a855f7; background: linear-gradient(180deg, #280a3a 0%, #150321 100%); }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a192f; }
+        ::-webkit-scrollbar-thumb { background: #2563eb; border-radius: 4px; }
+    </style>
+</head>
+<body class="stage-bg min-h-screen flex flex-col justify-between p-2 md:p-4 relative">
+
+    <!-- Background Bokeh & Stage Lights -->
+    <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div class="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl"></div>
+        <div class="absolute top-0 right-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl"></div>
+    </div>
+
+    <div class="relative z-10 max-w-[1600px] mx-auto w-full flex flex-col justify-between min-h-screen space-y-4">
+        
+        <!-- HEADER SECTION -->
+        <header class="flex items-center justify-between px-2 md:px-6 py-2 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-blue-500/30 shadow-2xl">
+            <!-- Left Logo (Tut Wuri Handayani / Custom) -->
+            <div class="flex items-center gap-3">
+                <div class="relative group cursor-pointer" onclick="triggerLogoUpload('left')" title="Klik untuk ganti Logo Kiri">
+                    <div class="w-16 h-16 md:w-20 md:h-20 rounded-full bg-blue-900/80 border-2 border-cyan-400 p-2 flex items-center justify-center shadow-lg shadow-cyan-500/20 hover:scale-105 transition-transform">
+                        <img id="logo-left-img" src="https://upload.wikimedia.org/wikipedia/commons/9/9c/Logo_Tut_Wuri_Handayani.png" alt="Tut Wuri Handayani" class="max-h-full object-contain filter drop-shadow" onerror="this.src='https://placehold.co/100x100/0284c7/ffffff?text=LOGO'">
+                    </div>
+                    <div class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <i class="fas fa-camera text-white text-xs"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Title Box -->
+            <div class="text-center flex-1 mx-2 md:mx-6">
+                <div class="flex items-center justify-center gap-2 md:gap-4">
+                    <i class="fas fa-trophy text-yellow-400 text-2xl md:text-5xl filter drop-shadow-lg text-glow-yellow animate-pulse"></i>
+                    <h1 id="display-main-title" class="text-2xl md:text-5xl lg:text-6xl font-black uppercase tracking-wider text-yellow-400 text-glow-yellow italic stroke-black">
+                        CERDAS CERMAT
+                    </h1>
+                    <i class="fas fa-trophy text-yellow-400 text-2xl md:text-5xl filter drop-shadow-lg text-glow-yellow animate-pulse"></i>
+                </div>
+                <!-- Banner Ribbons Subtitle -->
+                <div class="mt-1 inline-block bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-700 text-white font-bold px-4 md:px-8 py-1 rounded-full border border-blue-300/40 shadow-md text-xs md:text-base tracking-widest uppercase">
+                    <span id="display-sub-title">NAMA LOMBA DAPAT DIEDIT DI SINI</span>
+                </div>
+            </div>
+
+            <!-- Right Logo (School / Institution Logo) -->
+            <div class="flex items-center gap-3">
+                <div class="relative group cursor-pointer" onclick="triggerLogoUpload('right')" title="Klik untuk ganti Logo Kanan">
+                    <div class="w-16 h-16 md:w-20 md:h-20 rounded-full bg-blue-900/80 border-2 border-cyan-400 p-2 flex items-center justify-center shadow-lg shadow-cyan-500/20 hover:scale-105 transition-transform">
+                        <img id="logo-right-img" src="https://placehold.co/100x100/0369a1/ffffff?text=SEKOLAH" alt="Logo Sekolah" class="max-h-full object-contain filter drop-shadow">
+                    </div>
+                    <div class="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <i class="fas fa-camera text-white text-xs"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Hidden File Inputs for Logos -->
+            <input type="file" id="left-logo-input" class="hidden" accept="image/*" onchange="loadLogo(event, 'left')">
+            <input type="file" id="right-logo-input" class="hidden" accept="image/*" onchange="loadLogo(event, 'right')">
+        </header>
+
+        <!-- CENTER TIMER DISPLAY (WAKTU MENJAWAB) -->
+        <div class="flex justify-center items-center my-2">
+            <div class="relative bg-slate-950/90 border-4 border-cyan-500/80 rounded-3xl p-3 md:p-5 shadow-[0_0_40px_rgba(6,182,212,0.4)] flex flex-col items-center min-w-[280px] md:min-w-[360px]">
+                <span class="text-cyan-400 text-xs md:text-sm font-extrabold uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <i class="fas fa-clock"></i> WAKTU MENJAWAB
+                </span>
+                
+                <!-- LED Digital Screen -->
+                <div class="bg-black/90 border-2 border-cyan-900/80 rounded-2xl px-6 py-2 shadow-inner w-full text-center">
+                    <span id="timer-display" class="font-digital text-5xl md:text-7xl font-extrabold text-white text-glow-timer tracking-wider">
+                        00:30
+                    </span>
+                </div>
+
+                <!-- Set Time Gear Icon -->
+                <button onclick="openSetTimeModal()" class="absolute -right-3 -top-3 md:right-2 md:top-2 bg-slate-800 hover:bg-slate-700 border-2 border-cyan-400 text-cyan-300 p-2 md:p-3 rounded-2xl shadow-lg transition hover:rotate-45" title="Set Waktu">
+                    <i class="fas fa-cog text-lg md:text-xl"></i>
+                    <span class="block text-[9px] font-bold text-slate-300">SET WAKTU</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- DYNAMIC TEAMS SCOREBOARD GRID -->
+        <main id="teams-scoreboard" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 my-2"></main>
+
+        <!-- BOTTOM CONTROL BAR -->
+        <footer class="bg-slate-900/90 border-2 border-cyan-500/40 rounded-3xl p-3 md:p-4 backdrop-blur-lg shadow-2xl">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                
+                <!-- Left Title Edit Button Card -->
+                <div class="flex items-center gap-2 bg-slate-800/80 p-2 rounded-2xl border border-slate-700 flex-1 min-w-[200px]">
+                    <button onclick="openEditTitlesModal()" class="flex-1 bg-slate-100 hover:bg-white text-slate-900 p-2 rounded-xl text-left font-bold text-xs md:text-sm flex items-center justify-between shadow transition">
+                        <span class="truncate flex items-center gap-2">
+                            <i class="fas fa-pencil text-blue-600"></i> EDIT JUDUL LOMBA
+                        </span>
+                    </button>
+                    
+                    <button onclick="openEditTeamsModal()" class="btn-3d bg-blue-600 hover:bg-blue-500 text-white p-2 md:px-3 rounded-xl text-xs font-bold flex flex-col items-center justify-center border border-blue-400 min-w-[90px]">
+                        <i class="fas fa-edit mb-0.5"></i>
+                        <span>EDIT NAMA REGU</span>
+                    </button>
+                    <div class="flex items-center gap-1 bg-slate-950/80 border border-cyan-500/40 rounded-xl p-1.5">
+                        <button onclick="changeTeamCount(-1)" class="btn-3d bg-red-600 hover:bg-red-500 text-white w-9 h-9 rounded-lg font-black text-lg" title="Kurangi regu">−</button>
+                        <div class="text-center min-w-[54px]"><div class="text-[9px] text-slate-400 font-bold">JUMLAH REGU</div><div id="team-count-display" class="font-digital text-cyan-300 font-black text-lg">5</div></div>
+                        <button onclick="changeTeamCount(1)" class="btn-3d bg-green-600 hover:bg-green-500 text-white w-9 h-9 rounded-lg font-black text-lg" title="Tambah regu">+</button>
+                    </div>
+                </div>
+
+                <!-- Center Timer Control Buttons (Mulai, Jeda, Akhiri) -->
+                <div class="flex items-center gap-2">
+                    <!-- MULAI (PLAY) -->
+                    <button onclick="startTimer()" class="btn-3d bg-gradient-to-b from-green-500 to-green-700 hover:from-green-400 hover:to-green-600 text-white px-4 md:px-6 py-2.5 rounded-2xl flex flex-col items-center justify-center border border-green-300/50 min-w-[80px] md:min-w-[90px]">
+                        <i class="fas fa-play text-lg md:text-xl mb-1"></i>
+                        <span class="font-extrabold text-xs">MULAI</span>
+                    </button>
+                    <!-- JEDA (PAUSE) -->
+                    <button onclick="pauseTimer()" class="btn-3d bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-400 hover:to-blue-600 text-white px-4 md:px-6 py-2.5 rounded-2xl flex flex-col items-center justify-center border border-blue-300/50 min-w-[80px] md:min-w-[90px]">
+                        <i class="fas fa-pause text-lg md:text-xl mb-1"></i>
+                        <span class="font-extrabold text-xs">JEDA</span>
+                    </button>
+                    <!-- AKHIRI (STOP) -->
+                    <button onclick="stopTimer()" class="btn-3d bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white px-4 md:px-6 py-2.5 rounded-2xl flex flex-col items-center justify-center border border-red-300/50 min-w-[80px] md:min-w-[90px]">
+                        <i class="fas fa-stop text-lg md:text-xl mb-1"></i>
+                        <span class="font-extrabold text-xs">AKHIRI</span>
+                    </button>
+                </div>
+
+                <!-- Right Sound & Settings & Reset -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <!-- SHARE / LAYAR PENONTON -->
+                    <button onclick="openShareModal()" class="btn-3d bg-gradient-to-b from-cyan-500 to-blue-700 hover:from-cyan-400 hover:to-blue-600 text-white p-2 md:px-4 md:py-2.5 rounded-2xl flex flex-col items-center justify-center border border-cyan-300 min-w-[75px]" title="Bagikan skor dan waktu">
+                        <i class="fas fa-share-nodes text-lg mb-1"></i>
+                        <span class="font-extrabold text-[10px] md:text-xs">SHARE SKOR</span>
+                    </button>
+
+                    <!-- HASIL AKHIR -->
+                    <button onclick="openFinalResults()" class="btn-3d bg-gradient-to-b from-yellow-500 to-orange-600 hover:from-yellow-400 hover:to-orange-500 text-slate-950 p-2 md:px-4 md:py-2.5 rounded-2xl flex flex-col items-center justify-center border border-yellow-300 min-w-[75px]" title="Lihat peringkat dan hasil akhir">
+                        <i class="fas fa-trophy text-lg mb-1"></i>
+                        <span class="font-extrabold text-[10px] md:text-xs">HASIL AKHIR</span>
+                    </button>
+
+                    <!-- Sound Toggle Button -->
+                    <button id="sound-toggle-btn" onclick="toggleMute()" class="btn-3d bg-gradient-to-b from-slate-700 to-slate-900 text-white p-2 md:px-4 md:py-2.5 rounded-2xl flex flex-col items-center justify-center border border-slate-600 min-w-[75px]">
+                        <i id="sound-icon" class="fas fa-volume-high text-lg mb-1"></i>
+                        <span class="font-extrabold text-[10px] md:text-xs">SUARA ON/OFF</span>
+                    </button>
+
+                    <!-- Settings Checkboxes Panel -->
+                    <div class="bg-slate-800/90 border border-slate-700 p-2 rounded-2xl text-[10px] md:text-xs font-semibold space-y-1">
+                        <div class="text-cyan-400 font-extrabold text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                            <i class="fas fa-sliders"></i> PENGATURAN
+                        </div>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-countdown" checked class="rounded accent-cyan-500">
+                            <span>Suara hitung mundur</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-warning" checked class="rounded accent-cyan-500">
+                            <span>Suara peringatan</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-buttons" checked class="rounded accent-cyan-500">
+                            <span>Suara tombol</span>
+                        </label>
+                    </div>
+
+                    <!-- Reset Score Button -->
+                    <button onclick="confirmResetScores()" class="btn-3d bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white px-3 md:px-4 py-2.5 rounded-2xl flex flex-col items-center justify-center border border-red-400">
+                        <i class="fas fa-trash-alt text-lg md:text-xl mb-1"></i>
+                        <span class="font-extrabold text-xs">RESET SKOR</span>
+                    </button>
+                </div>
+
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- MODE LAYAR PENONTON -->
+    <div id="spectator-screen" class="hidden fixed inset-0 z-[100] bg-[#020b1e] text-white overflow-auto">
+        <div class="min-h-screen stage-bg p-3 md:p-6">
+            <div class="max-w-[1600px] mx-auto">
+                <header class="text-center mb-4">
+                    <div class="flex items-center justify-center gap-3">
+                        <img id="spectator-logo-left" class="w-12 h-12 md:w-16 md:h-16 object-contain rounded-full" alt="">
+                        <div>
+                            <h1 id="spectator-title" class="text-2xl md:text-5xl font-black text-yellow-400 text-glow-yellow">CERDAS CERMAT</h1>
+                            <div id="spectator-subtitle" class="text-cyan-300 text-xs md:text-base font-bold tracking-wider mt-1"></div>
+                        </div>
+                        <img id="spectator-logo-right" class="w-12 h-12 md:w-16 md:h-16 object-contain rounded-full" alt="">
+                    </div>
+                </header>
+
+                <div class="flex justify-center mb-5">
+                    <div class="bg-black/90 border-4 border-cyan-500 rounded-3xl px-8 py-4 md:px-16 shadow-[0_0_40px_rgba(6,182,212,0.4)] text-center">
+                        <div class="text-cyan-400 text-xs md:text-sm font-black tracking-widest">WAKTU MENJAWAB</div>
+                        <div id="spectator-timer" class="font-digital text-6xl md:text-9xl font-black text-white text-glow-timer">00:30</div>
+                    </div>
+                </div>
+
+                <div id="spectator-teams" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-5"></div>
+
+                <div class="text-center mt-6 text-xs text-slate-400">
+                    <span class="inline-flex items-center gap-2 bg-slate-900/80 border border-slate-700 rounded-full px-4 py-2">
+                        <span id="spectator-live-dot" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                        <span id="spectator-connection-status">Menghubungkan ke operator...</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: SET TIMER DURATION -->
+    <div id="modal-set-time" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-cyan-500 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <h3 class="text-xl font-black text-cyan-400 mb-4 flex items-center justify-center gap-2">
+                <i class="fas fa-clock"></i> SET DURASI WAKTU
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">Pilih Preset Detik:</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="setTimerPreset(10)" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 py-2 rounded-xl font-bold text-sm">10 Detik</button>
+                        <button onclick="setTimerPreset(30)" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 py-2 rounded-xl font-bold text-sm">30 Detik</button>
+                        <button onclick="setTimerPreset(60)" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 py-2 rounded-xl font-bold text-sm">60 Detik</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">Atur Manual (Detik):</label>
+                    <input type="number" id="input-custom-seconds" value="30" min="1" max="600" class="w-full bg-slate-950 border border-cyan-500/50 rounded-xl px-4 py-2 text-center text-xl font-bold text-white focus:outline-none focus:border-cyan-400">
+                </div>
+            </div>
+            <div class="flex gap-2 mt-6">
+                <button onclick="closeModal('modal-set-time')" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-sm">Batal</button>
+                <button onclick="applyCustomTime()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded-xl text-sm">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: EDIT CONTEST TITLES -->
+    <div id="modal-edit-titles" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-blue-500 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-black text-yellow-400 mb-4 text-center flex items-center justify-center gap-2">
+                <i class="fas fa-pen-to-square"></i> EDIT JUDUL LOMBA
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">Judul Utama:</label>
+                    <input type="text" id="input-main-title" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-white font-bold focus:outline-none focus:border-yellow-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">Sub Judul / Nama Kompetisi:</label>
+                    <input type="text" id="input-sub-title" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-white font-bold focus:outline-none focus:border-yellow-400">
+                </div>
+            </div>
+            <div class="flex gap-2 mt-6">
+                <button onclick="closeModal('modal-edit-titles')" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-sm">Batal</button>
+                <button onclick="saveTitles()" class="flex-1 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black py-2 rounded-xl text-sm">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: HASIL AKHIR, PERINGKAT, GRAFIK, CETAK & EXCEL -->
+    <div id="modal-final-results" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-3 md:p-6">
+        <div id="final-results-print" class="bg-slate-900 border-2 border-yellow-500 rounded-3xl p-4 md:p-6 max-w-5xl w-full max-h-[95vh] overflow-y-auto shadow-2xl">
+            <div class="text-center mb-4">
+                <div class="flex items-center justify-center gap-3">
+                    <img id="result-logo-left" class="w-12 h-12 object-contain rounded-full" alt="">
+                    <div>
+                        <h2 id="result-main-title" class="text-xl md:text-3xl font-black text-yellow-400">CERDAS CERMAT</h2>
+                        <p id="result-sub-title" class="text-cyan-300 text-xs md:text-sm font-bold"></p>
+                    </div>
+                    <img id="result-logo-right" class="w-12 h-12 object-contain rounded-full" alt="">
+                </div>
+                <div class="mt-3 inline-block bg-yellow-500 text-slate-950 px-5 py-1.5 rounded-full font-black text-sm md:text-base">HASIL AKHIR LOMBA</div>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-4">
+                <div class="bg-slate-950/70 border border-slate-700 rounded-2xl p-3">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-yellow-300 border-b border-slate-700">
+                                    <th class="p-2 text-center">Peringkat</th>
+                                    <th class="p-2 text-left">Regu</th>
+                                    <th class="p-2 text-center">Benar</th>
+                                    <th class="p-2 text-center">Salah</th>
+                                    <th class="p-2 text-center">Tidak</th>
+                                    <th class="p-2 text-right">Skor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="final-results-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-slate-950/70 border border-slate-700 rounded-2xl p-3 min-h-[280px]">
+                    <div class="text-cyan-300 font-black text-sm mb-2 flex items-center gap-2"><i class="fas fa-chart-column"></i> GRAFIK PERBANDINGAN SKOR</div>
+                    <div class="relative h-[260px] md:h-[300px]"><canvas id="final-score-chart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+                <button onclick="downloadFinalExcel()" class="bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2"><i class="fas fa-file-excel"></i> DOWNLOAD EXCEL</button>
+                <button onclick="printFinalResults()" class="bg-blue-600 hover:bg-blue-500 text-white font-black py-3 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2"><i class="fas fa-print"></i> CETAK HASIL</button>
+                <button onclick="openFinalResults()" class="bg-slate-700 hover:bg-slate-600 text-white font-black py-3 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2"><i class="fas fa-arrows-rotate"></i> PERBARUI</button>
+                <button onclick="closeModal('modal-final-results')" class="bg-red-600 hover:bg-red-500 text-white font-black py-3 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2"><i class="fas fa-times"></i> TUTUP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SHARE SKOR & WAKTU REAL-TIME -->
+    <div id="modal-share" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-cyan-500 rounded-3xl p-6 max-w-lg w-full shadow-2xl">
+            <h3 class="text-xl font-black text-cyan-400 mb-2 text-center flex items-center justify-center gap-2">
+                <i class="fas fa-share-nodes"></i> BAGIKAN SKOR & WAKTU
+            </h3>
+            <p class="text-slate-300 text-xs text-center mb-5">
+                Buka link ini di HP/laptop lain. Skor dan countdown akan mengikuti layar operator secara real-time.
+            </p>
+
+            <div id="share-status" class="mb-4 rounded-xl bg-slate-950 border border-slate-700 p-3 text-center text-xs font-bold text-yellow-300">
+                Menghubungkan layanan berbagi...
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 mx-auto w-fit mb-4">
+                <div id="share-qrcode"></div>
+            </div>
+
+            <label class="block text-xs font-bold text-slate-400 mb-1">Link layar penonton:</label>
+            <div class="flex gap-2">
+                <input id="share-link" readonly
+                    class="flex-1 min-w-0 bg-slate-950 border border-cyan-500/50 rounded-xl px-3 py-2 text-white text-xs"
+                    value="">
+                <button onclick="copyShareLink()" class="bg-cyan-600 hover:bg-cyan-500 px-4 rounded-xl font-bold text-xs">
+                    <i class="fas fa-copy"></i> Salin
+                </button>
+            </div>
+
+            <div class="mt-4 bg-slate-800/70 rounded-xl p-3 text-[11px] text-slate-300 leading-relaxed">
+                <b class="text-cyan-300">Kode ruang:</b> <span id="share-room-code">-</span><br>
+                <span id="share-viewer-count">Penonton terhubung: 0</span>
+            </div>
+
+            <button onclick="closeShareModal()" class="w-full mt-5 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL 3: EDIT SATU NAMA REGU -->
+    <div id="modal-edit-single-team" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-cyan-500 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 class="text-xl font-black text-cyan-400 mb-5 text-center flex items-center justify-center gap-2">
+                <i class="fas fa-user-edit"></i> EDIT NAMA REGU
+            </h3>
+
+            <input type="hidden" id="single-team-number" value="1">
+
+            <label class="block text-xs font-bold text-slate-300 mb-2 text-center">
+                Nama regu
+            </label>
+
+            <input
+                type="text"
+                id="input-single-team-name"
+                maxlength="40"
+                autocomplete="off"
+                class="w-full bg-slate-950 border-2 border-cyan-500/50 rounded-xl px-4 py-3 text-white text-center text-lg font-bold focus:outline-none focus:border-cyan-400"
+                placeholder="Masukkan nama regu"
+                onkeydown="if(event.key === 'Enter') saveSingleTeam(); if(event.key === 'Escape') closeModal('modal-edit-single-team');"
+            >
+
+            <div class="flex gap-2 mt-6">
+                <button onclick="closeModal('modal-edit-single-team')" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-sm">
+                    Batal
+                </button>
+                <button onclick="saveSingleTeam()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black py-3 rounded-xl text-sm">
+                    <i class="fas fa-check mr-1"></i> Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: EDIT ALL TEAM NAMES -->
+    <div id="modal-edit-teams" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-cyan-500 rounded-3xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-black text-cyan-400 mb-2 text-center flex items-center justify-center gap-2">
+                <i class="fas fa-users-gear"></i> EDIT NAMA SEMUA REGU
+            </h3>
+            <p class="text-center text-xs text-slate-400 mb-4">Jumlah regu saat ini: <b id="modal-team-count" class="text-cyan-300">5</b></p>
+            <div id="team-name-inputs" class="space-y-3"></div>
+            <div class="flex gap-2 mt-6">
+                <button onclick="closeModal('modal-edit-teams')" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-sm">Batal</button>
+                <button onclick="saveAllTeams()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black py-2 rounded-xl text-sm">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* WEB AUDIO API SYNTHESIZER (No external audio files required!) */
+        let audioCtx = null;
+        let isMuted = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Play Beep Countdown Sound
+        function playBeep(freq = 800, duration = 0.1, type = 'sine') {
+            if (isMuted || !document.getElementById('chk-countdown').checked) return;
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        // Play Time's Up Alarm Buzzer
+        function playBuzzer() {
+            if (isMuted || !document.getElementById('chk-warning').checked) return;
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(110, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.2);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 1.2);
+            } catch(e) {}
+        }
+
+        // Play Correct Chime (+100)
+        function playCorrectSound() {
+            if (isMuted || !document.getElementById('chk-buttons').checked) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                osc.frequency.setValueAtTime(1046.50, now + 0.3); // C6
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(now + 0.6);
+            } catch(e) {}
+        }
+
+        // Play Wrong Sound (-50)
+        function playWrongSound() {
+            if (isMuted || !document.getElementById('chk-buttons').checked) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.linearRampToValueAtTime(150, now + 0.3);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(now + 0.4);
+            } catch(e) {}
+        }
+
+        // Toggle Sound Mute
+        function toggleMute() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('sound-toggle-btn');
+            const icon = document.getElementById('sound-icon');
+            if (isMuted) {
+                icon.className = 'fas fa-volume-xmark text-lg mb-1 text-red-400';
+                btn.classList.add('opacity-70');
+            } else {
+                icon.className = 'fas fa-volume-high text-lg mb-1 text-white';
+                btn.classList.remove('opacity-70');
+                playBeep(1000, 0.1);
+            }
+        }
+
+        /* STATE & TIMER VARIABLES */
+        let teamCount = 5;
+        const MIN_TEAMS = 2;
+        const MAX_TEAMS = 10;
+        let teamScores = [0, 0, 0, 0, 0];
+        let teamCorrect = [0, 0, 0, 0, 0];
+        let teamWrong = [0, 0, 0, 0, 0];
+        let teamNoAnswer = [0, 0, 0, 0, 0];
+        let teamNames = ["REGU 1", "REGU 2", "REGU 3", "REGU 4", "REGU 5"];
+
+        const teamColors = [
+            ['red','from-red-900/80 to-red-950/90','border-red-500','bg-red-600/30','border-red-500/50'],
+            ['blue','from-blue-900/80 to-blue-950/90','border-blue-500','bg-blue-600/30','border-blue-500/50'],
+            ['yellow','from-yellow-900/80 to-yellow-950/90','border-yellow-500','bg-yellow-600/30','border-yellow-500/50'],
+            ['green','from-green-900/80 to-green-950/90','border-green-500','bg-green-600/30','border-green-500/50'],
+            ['purple','from-purple-900/80 to-purple-950/90','border-purple-500','bg-purple-600/30','border-purple-500/50'],
+            ['pink','from-pink-900/80 to-pink-950/90','border-pink-500','bg-pink-600/30','border-pink-500/50'],
+            ['orange','from-orange-900/80 to-orange-950/90','border-orange-500','bg-orange-600/30','border-orange-500/50'],
+            ['cyan','from-cyan-900/80 to-cyan-950/90','border-cyan-500','bg-cyan-600/30','border-cyan-500/50'],
+            ['indigo','from-indigo-900/80 to-indigo-950/90','border-indigo-500','bg-indigo-600/30','border-indigo-500/50'],
+            ['teal','from-teal-900/80 to-teal-950/90','border-teal-500','bg-teal-600/30','border-teal-500/50']
+        ];
+
+        function changeTeamCount(delta) {
+            const next = teamCount + delta;
+            if (next < MIN_TEAMS || next > MAX_TEAMS) {
+                playBeep(delta > 0 ? 300 : 250, 0.08);
+                return;
+            }
+            if (next < teamCount && (teamScores.slice(next).some(v => v !== 0) || teamCorrect.slice(next).some(v => v !== 0) || teamWrong.slice(next).some(v => v !== 0) || teamNoAnswer.slice(next).some(v => v !== 0))) {
+                if (!confirm(`Regu ${next + 1} sampai ${teamCount} akan dihapus dari pertandingan. Skor dan statistiknya juga dihapus. Lanjutkan?`)) return;
+            }
+            teamCount = next;
+            while (teamNames.length < teamCount) teamNames.push(`REGU ${teamNames.length + 1}`);
+            while (teamScores.length < teamCount) teamScores.push(0);
+            while (teamCorrect.length < teamCount) teamCorrect.push(0);
+            while (teamWrong.length < teamCount) teamWrong.push(0);
+            while (teamNoAnswer.length < teamCount) teamNoAnswer.push(0);
+            teamNames = teamNames.slice(0, teamCount);
+            teamScores = teamScores.slice(0, teamCount);
+            teamCorrect = teamCorrect.slice(0, teamCount);
+            teamWrong = teamWrong.slice(0, teamCount);
+            teamNoAnswer = teamNoAnswer.slice(0, teamCount);
+            renderTeams();
+            updateTeamCountUI();
+            broadcastScoreboard();
+        }
+
+        function updateTeamCountUI() {
+            const el = document.getElementById('team-count-display');
+            if (el) el.innerText = teamCount;
+            const modalCount = document.getElementById('modal-team-count');
+            if (modalCount) modalCount.innerText = teamCount;
+        }
+
+        function renderTeams() {
+            const container = document.getElementById('teams-scoreboard');
+            if (!container) return;
+            container.className = `grid grid-cols-1 sm:grid-cols-2 ${teamCount >= 5 ? 'lg:grid-cols-5' : teamCount === 4 ? 'lg:grid-cols-4' : teamCount === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-3 md:gap-4 my-2`;
+            container.innerHTML = '';
+            for (let i = 0; i < teamCount; i++) {
+                const c = teamColors[i % teamColors.length];
+                const n = i + 1;
+                const card = document.createElement('div');
+                card.className = `team-card rounded-2xl p-3 flex flex-col justify-between bg-gradient-to-b ${c[1]} ${c[2]}`;
+                card.innerHTML = `
+                    <div>
+                        <div class="${c[3]} border ${c[4]} rounded-xl p-2 flex justify-between items-center mb-2">
+                            <span id="team-name-${n}" onclick="editSingleTeam(${n})" class="font-extrabold text-base md:text-lg text-white truncate cursor-pointer hover:opacity-80 transition" title="Klik untuk ubah nama regu">${escapeHtml(teamNames[i] || 'REGU ' + n)}</span>
+                            <button onclick="editSingleTeam(${n})" class="bg-blue-600 hover:bg-blue-500 text-white text-xs p-1.5 rounded-lg border border-blue-300 shadow" title="Edit nama regu"><i class="fas fa-pen"></i></button>
+                        </div>
+                        <div class="bg-black/80 rounded-xl py-4 my-2 text-center shadow-inner border ${c[2]}/60">
+                            <span id="score-team-${n}" class="font-digital text-5xl md:text-6xl font-black text-white text-glow-timer">${teamScores[i] || 0}</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 mt-2">
+                        <button onclick="addScore(${n}, 100)" class="btn-3d bg-gradient-to-b from-green-500 to-green-700 hover:from-green-400 hover:to-green-600 text-white rounded-xl py-2 flex flex-col items-center justify-center border border-green-300/40"><span class="font-black text-sm md:text-base">+100</span><span class="text-[10px] font-bold opacity-90">Benar</span></button>
+                        <button onclick="addScore(${n}, -50)" class="btn-3d bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white rounded-xl py-2 flex flex-col items-center justify-center border border-red-300/40"><span class="font-black text-sm md:text-base">-50</span><span class="text-[10px] font-bold opacity-90">Salah</span></button>
+                        <button onclick="addScore(${n}, 0)" class="btn-3d bg-gradient-to-b from-slate-600 to-slate-800 hover:from-slate-500 hover:to-slate-700 text-white rounded-xl py-2 flex flex-col items-center justify-center border border-slate-300/40"><span class="font-black text-sm md:text-base">0</span><span class="text-[10px] font-bold opacity-90 text-center leading-tight">Tidak Menjawab</span></button>
+                    </div>`;
+                container.appendChild(card);
+            }
+        }
+
+        let defaultTime = 30; // seconds
+        let currentTime = 30;
+        let timerInterval = null;
+        let isTimerRunning = false;
+
+        // Add or deduct score
+        function addScore(teamIndex, points) {
+            initAudio();
+            const idx = teamIndex - 1;
+            teamScores[idx] += points;
+            if (points > 0) teamCorrect[idx]++;
+            else if (points < 0) teamWrong[idx]++;
+            else teamNoAnswer[idx]++;
+            document.getElementById(`score-team-${teamIndex}`).innerText = teamScores[idx];
+            broadcastScoreboard();
+
+            if (points > 0) {
+                playCorrectSound();
+            } else if (points < 0) {
+                playWrongSound();
+            } else {
+                playBeep(400, 0.08);
+            }
+        }
+
+        // Format Seconds into MM:SS
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateTimerDisplay() {
+            document.getElementById('timer-display').innerText = formatTime(currentTime);
+        }
+
+        // Timer Control Functions
+        function startTimer() {
+            initAudio();
+            if (isTimerRunning) return;
+            if (currentTime <= 0) currentTime = defaultTime;
+            
+            isTimerRunning = true;
+            broadcastScoreboard();
+            playBeep(1200, 0.15);
+
+            timerInterval = setInterval(() => {
+                currentTime--;
+                updateTimerDisplay();
+                broadcastScoreboard();
+
+                if (currentTime <= 5 && currentTime > 0) {
+                    playBeep(900, 0.15, 'square');
+                }
+
+                if (currentTime <= 0) {
+                    clearInterval(timerInterval);
+                    isTimerRunning = false;
+                    playBuzzer();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            initAudio();
+            if (!isTimerRunning) return;
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            broadcastScoreboard();
+            playBeep(600, 0.1);
+        }
+
+        function stopTimer() {
+            initAudio();
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            currentTime = defaultTime;
+            updateTimerDisplay();
+            broadcastScoreboard();
+            playBeep(400, 0.1);
+        }
+
+        /* MODAL HANDLERS */
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function openSetTimeModal() {
+            document.getElementById('input-custom-seconds').value = defaultTime;
+            document.getElementById('modal-set-time').classList.remove('hidden');
+        }
+
+        function setTimerPreset(sec) {
+            defaultTime = sec;
+            currentTime = sec;
+            updateTimerDisplay();
+            broadcastScoreboard();
+            closeModal('modal-set-time');
+        }
+
+        function applyCustomTime() {
+            const val = parseInt(document.getElementById('input-custom-seconds').value);
+            if (!isNaN(val) && val > 0) {
+                defaultTime = val;
+                currentTime = val;
+                updateTimerDisplay();
+                broadcastScoreboard();
+            }
+            closeModal('modal-set-time');
+        }
+
+        function openEditTitlesModal() {
+            document.getElementById('input-main-title').value = document.getElementById('display-main-title').innerText;
+            document.getElementById('input-sub-title').value = document.getElementById('display-sub-title').innerText;
+            document.getElementById('modal-edit-titles').classList.remove('hidden');
+        }
+
+        function saveTitles() {
+            const main = document.getElementById('input-main-title').value.trim();
+            const sub = document.getElementById('input-sub-title').value.trim();
+            if (main) document.getElementById('display-main-title').innerText = main;
+            if (sub) document.getElementById('display-sub-title').innerText = sub;
+            broadcastScoreboard();
+            closeModal('modal-edit-titles');
+        }
+
+        function openEditTeamsModal() {
+            const box = document.getElementById('team-name-inputs');
+            if (!box) return;
+            box.innerHTML = '';
+            for (let i = 1; i <= teamCount; i++) {
+                const c = teamColors[(i - 1) % teamColors.length];
+                box.insertAdjacentHTML('beforeend', `<div><label class="block text-xs font-bold text-${c[0]}-400 mb-1">Regu ${i}:</label><input type="text" id="input-team-${i}" value="${escapeHtml(teamNames[i-1] || 'REGU ' + i)}" maxlength="40" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-sm"></div>`);
+            }
+            updateTeamCountUI();
+            document.getElementById('modal-edit-teams').classList.remove('hidden');
+        }
+
+        function saveAllTeams() {
+            for (let i = 1; i <= teamCount; i++) {
+                const input = document.getElementById(`input-team-${i}`);
+                const val = input?.value.trim();
+                if (val) teamNames[i - 1] = val;
+            }
+            renderTeams();
+            broadcastScoreboard();
+            closeModal('modal-edit-teams');
+        }
+
+        // Edit satu nama regu menggunakan modal (lebih stabil daripada prompt browser)
+        function editSingleTeam(index) {
+            const input = document.getElementById(`input-single-team-name`);
+            const teamNumber = document.getElementById(`single-team-number`);
+
+            if (!input || !teamNumber) {
+                console.error("Elemen modal edit regu tidak ditemukan.");
+                return;
+            }
+
+            teamNumber.value = index;
+            input.value = teamNames[index - 1] || `REGU ${index}`;
+            document.getElementById('modal-edit-single-team').classList.remove('hidden');
+
+            // Fokus dan pilih teks agar langsung bisa diganti
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
+
+        function saveSingleTeam() {
+            const index = parseInt(document.getElementById('single-team-number').value, 10);
+            const input = document.getElementById('input-single-team-name');
+            const newName = input.value.trim();
+
+            if (!index || index < 1 || index > teamCount) return;
+
+            if (newName === '') {
+                alert('Nama regu tidak boleh kosong.');
+                input.focus();
+                return;
+            }
+
+            teamNames[index - 1] = newName;
+            document.getElementById(`team-name-${index}`).innerText = newName;
+
+            // Sinkronkan juga dengan form edit semua regu
+            const allInput = document.getElementById(`input-team-${index}`);
+            if (allInput) allInput.value = newName;
+
+            broadcastScoreboard();
+            closeModal('modal-edit-single-team');
+        }
+
+        function confirmResetScores() {
+            if (confirm("Apakah Anda yakin ingin me-reset semua skor ke 0?")) {
+                teamScores = Array(teamCount).fill(0);
+                teamCorrect = Array(teamCount).fill(0);
+                teamWrong = Array(teamCount).fill(0);
+                teamNoAnswer = Array(teamCount).fill(0);
+                renderTeams();
+                broadcastScoreboard();
+                playWrongSound();
+            }
+        }
+
+        /* LOGO UPLOAD HANDLERS */
+        function triggerLogoUpload(side) {
+            document.getElementById(`${side}-logo-input`).click();
+        }
+
+        function loadLogo(event, side) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById(`logo-${side}-img`).src = e.target.result;
+                    broadcastScoreboard();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+
+        /* =========================================================
+           HASIL AKHIR, PERINGKAT, GRAFIK, CETAK & EXCEL
+           ========================================================= */
+        let finalScoreChart = null;
+
+        function getRankedResults() {
+            return teamNames.map((name, i) => ({
+                index: i,
+                name: name || `REGU ${i + 1}`,
+                score: Number(teamScores[i] || 0),
+                correct: Number(teamCorrect[i] || 0),
+                wrong: Number(teamWrong[i] || 0),
+                noAnswer: Number(teamNoAnswer[i] || 0)
+            })).sort((a, b) => b.score - a.score || b.correct - a.correct || a.index - b.index);
+        }
+
+        function rankLabel(rank) {
+            if (rank === 1) return '🥇 1';
+            if (rank === 2) return '🥈 2';
+            if (rank === 3) return '🥉 3';
+            return String(rank);
+        }
+
+        function openFinalResults() {
+            const modal = document.getElementById('modal-final-results');
+            if (modal.classList.contains('hidden')) modal.classList.remove('hidden');
+
+            document.getElementById('result-main-title').innerText = document.getElementById('display-main-title')?.innerText || 'CERDAS CERMAT';
+            document.getElementById('result-sub-title').innerText = document.getElementById('display-sub-title')?.innerText || '';
+            const left = document.getElementById('result-logo-left');
+            const right = document.getElementById('result-logo-right');
+            if (left) left.src = document.getElementById('logo-left-img')?.src || '';
+            if (right) right.src = document.getElementById('logo-right-img')?.src || '';
+
+            const rows = getRankedResults();
+            const tbody = document.getElementById('final-results-body');
+            tbody.innerHTML = rows.map((r, i) => `
+                <tr class="border-b border-slate-800 ${i < 3 ? 'bg-yellow-500/5' : ''}">
+                    <td class="p-2 text-center font-black text-yellow-300">${rankLabel(i + 1)}</td>
+                    <td class="p-2 font-bold text-white">${escapeHtml(r.name)}</td>
+                    <td class="p-2 text-center text-green-300 font-bold">${r.correct}</td>
+                    <td class="p-2 text-center text-red-300 font-bold">${r.wrong}</td>
+                    <td class="p-2 text-center text-slate-300 font-bold">${r.noAnswer}</td>
+                    <td class="p-2 text-right font-digital font-black text-xl text-white">${r.score}</td>
+                </tr>`).join('');
+
+            renderFinalChart(rows);
+        }
+
+        function renderFinalChart(rows) {
+            const canvas = document.getElementById('final-score-chart');
+            if (!canvas || !window.Chart) return;
+            if (finalScoreChart) finalScoreChart.destroy();
+            finalScoreChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: rows.map(r => r.name),
+                    datasets: [{
+                        label: 'Skor Akhir',
+                        data: rows.map(r => r.score),
+                        borderWidth: 1,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { color: '#cbd5e1' }, grid: { color: 'rgba(148,163,184,.15)' } }, x: { ticks: { color: '#cbd5e1' }, grid: { display: false } } }
+                }
+            });
+        }
+
+        function downloadFinalExcel() {
+            if (!window.XLSX) {
+                alert('Fitur Excel belum termuat. Pastikan perangkat terhubung ke internet.');
+                return;
+            }
+            const rows = getRankedResults();
+            const title = document.getElementById('display-main-title')?.innerText || 'CERDAS CERMAT';
+            const subtitle = document.getElementById('display-sub-title')?.innerText || '';
+            const data = [
+                [title],
+                [subtitle],
+                ['HASIL AKHIR LOMBA'],
+                [],
+                ['Peringkat', 'Nama Regu', 'Benar', 'Salah', 'Tidak Menjawab', 'Skor Akhir', 'Keterangan'],
+                ...rows.map((r, i) => [i + 1, r.name, r.correct, r.wrong, r.noAnswer, r.score, i === 0 ? 'Juara 1' : i === 1 ? 'Juara 2' : i === 2 ? 'Juara 3' : ''])
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            ws['!cols'] = [{wch:12},{wch:28},{wch:10},{wch:10},{wch:18},{wch:14},{wch:14}];
+            ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}},{s:{r:2,c:0},e:{r:2,c:6}}];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Hasil Akhir');
+
+            const chartData = [['Nama Regu', 'Skor Akhir'], ...rows.map(r => [r.name, r.score])];
+            const chartWs = XLSX.utils.aoa_to_sheet(chartData);
+            chartWs['!cols'] = [{wch:28},{wch:14}];
+            XLSX.utils.book_append_sheet(wb, chartWs, 'Data Grafik');
+
+            const safeTitle = title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'Cerdas_Cermat';
+            XLSX.writeFile(wb, `${safeTitle}_Hasil_Akhir.xlsx`);
+        }
+
+        function printFinalResults() {
+            const content = document.getElementById('final-results-print');
+            if (!content) return;
+            const printWindow = window.open('', '_blank', 'width=1100,height=800');
+            if (!printWindow) { alert('Pop-up diblokir browser. Izinkan pop-up untuk mencetak.'); return; }
+            const chartImage = finalScoreChart ? finalScoreChart.toBase64Image() : '';
+            printWindow.document.write(`<!doctype html><html><head><title>Hasil Akhir Cerdas Cermat</title><style>
+                body{font-family:Arial,sans-serif;padding:24px;color:#111} h2{margin:0 0 4px;text-align:center} p{text-align:center;margin:4px 0 18px;color:#555} .badge{text-align:center;font-weight:700;margin-bottom:18px} table{width:100%;border-collapse:collapse;margin-top:15px} th,td{border:1px solid #999;padding:8px;text-align:center} th:nth-child(2),td:nth-child(2){text-align:left} th{background:#eee}.chart{display:block;max-width:850px;width:100%;margin:25px auto 0}@media print{button{display:none}}</style></head><body>`);
+            printWindow.document.write(`<h2>${escapeHtml(document.getElementById('display-main-title')?.innerText || 'CERDAS CERMAT')}</h2><p>${escapeHtml(document.getElementById('display-sub-title')?.innerText || '')}</p><div class="badge">HASIL AKHIR LOMBA</div>`);
+            printWindow.document.write(document.querySelector('#final-results-print table').outerHTML);
+            if (chartImage) printWindow.document.write(`<img class="chart" src="${chartImage}">`);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => printWindow.print(), 300);
+        }
+
+        /* =========================================================
+           SHARE SKOR & WAKTU REAL-TIME
+           Operator -> Penonton menggunakan PeerJS (WebRTC)
+           ========================================================= */
+        let peer = null;
+        let operatorConnections = [];
+        let peerReady = false;
+        let viewerMode = false;
+        let viewerConnection = null;
+        let viewerTimerInterval = null;
+        let viewerTimerState = {
+            currentTime: 30,
+            running: false,
+            receivedAt: 0
+        };
+
+        function getRoomCode() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('room') || '';
+        }
+
+        function createRoomId() {
+            return 'cc-' + Math.random().toString(36).slice(2, 8) + '-' + Date.now().toString(36).slice(-4);
+        }
+
+        function currentAppState() {
+            return {
+                type: 'scoreboard-state',
+                teamScores: [...teamScores],
+                teamCorrect: [...teamCorrect],
+                teamWrong: [...teamWrong],
+                teamNoAnswer: [...teamNoAnswer],
+                teamNames: [...teamNames],
+                teamCount: teamCount,
+                mainTitle: document.getElementById('display-main-title')?.innerText || 'CERDAS CERMAT',
+                subTitle: document.getElementById('display-sub-title')?.innerText || '',
+                currentTime: currentTime,
+                defaultTime: defaultTime,
+                isTimerRunning: isTimerRunning,
+                sentAt: Date.now(),
+                logoLeft: document.getElementById('logo-left-img')?.src || '',
+                logoRight: document.getElementById('logo-right-img')?.src || ''
+            };
+        }
+
+        function broadcastScoreboard() {
+            if (viewerMode) return;
+            const state = currentAppState();
+            operatorConnections = operatorConnections.filter(conn => conn && conn.open);
+            operatorConnections.forEach(conn => {
+                try { conn.send(state); } catch (e) {}
+            });
+        }
+
+        function initOperatorPeer() {
+            if (viewerMode || peer) return;
+
+            const room = createRoomId();
+            peer = new Peer(room, { debug: 0 });
+
+            peer.on('open', id => {
+                peerReady = true;
+                window.operatorRoomId = id;
+                updateShareLink();
+                const status = document.getElementById('share-status');
+                if (status) {
+                    status.innerHTML = '<span class="text-green-400"><i class="fas fa-circle"></i> Siap dibagikan</span>';
+                }
+            });
+
+            peer.on('connection', conn => {
+                operatorConnections.push(conn);
+
+                conn.on('open', () => {
+                    try { conn.send(currentAppState()); } catch (e) {}
+                    updateViewerCount();
+                });
+
+                conn.on('close', () => {
+                    operatorConnections = operatorConnections.filter(c => c !== conn);
+                    updateViewerCount();
+                });
+
+                conn.on('error', () => {
+                    operatorConnections = operatorConnections.filter(c => c !== conn);
+                    updateViewerCount();
+                });
+            });
+
+            peer.on('error', err => {
+                const status = document.getElementById('share-status');
+                if (status) {
+                    status.innerHTML = '<span class="text-red-400">Gagal menghubungkan layanan berbagi. Coba muat ulang halaman.</span>';
+                }
+                console.error('PeerJS:', err);
+            });
+        }
+
+        function updateViewerCount() {
+            const el = document.getElementById('share-viewer-count');
+            if (el) el.innerText = `Penonton terhubung: ${operatorConnections.filter(c => c.open).length}`;
+        }
+
+        function updateShareLink() {
+            if (!window.operatorRoomId) return;
+            const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(window.operatorRoomId)}`;
+            const input = document.getElementById('share-link');
+            const code = document.getElementById('share-room-code');
+            if (input) input.value = url;
+            if (code) code.innerText = window.operatorRoomId;
+
+            const qr = document.getElementById('share-qrcode');
+            if (qr) {
+                qr.innerHTML = '';
+                if (window.QRCode) {
+                    new QRCode(qr, {
+                        text: url,
+                        width: 180,
+                        height: 180,
+                        colorDark: '#020b1e',
+                        colorLight: '#ffffff'
+                    });
+                }
+            }
+        }
+
+        function openShareModal() {
+            document.getElementById('modal-share').classList.remove('hidden');
+            if (!peer) initOperatorPeer();
+            updateShareLink();
+            updateViewerCount();
+        }
+
+        function closeShareModal() {
+            document.getElementById('modal-share').classList.add('hidden');
+        }
+
+        async function copyShareLink() {
+            const input = document.getElementById('share-link');
+            if (!input || !input.value) return;
+
+            try {
+                await navigator.clipboard.writeText(input.value);
+                const btn = event?.currentTarget;
+                if (btn) {
+                    const old = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Tersalin';
+                    setTimeout(() => btn.innerHTML = old, 1500);
+                }
+            } catch (e) {
+                input.select();
+                document.execCommand('copy');
+                alert('Link berhasil disalin.');
+            }
+        }
+
+        function initViewerMode(roomId) {
+            viewerMode = true;
+
+            // Sembunyikan operator dan tampilkan layar penonton
+            const operatorApp = document.querySelector('body > .relative.z-10');
+            if (operatorApp) operatorApp.classList.add('hidden');
+
+            const spectator = document.getElementById('spectator-screen');
+            spectator.classList.remove('hidden');
+
+            if (!roomId) {
+                document.getElementById('spectator-connection-status').innerText = 'Kode ruang tidak ditemukan.';
+                return;
+            }
+
+            const PeerClass = window.Peer;
+            if (!PeerClass) {
+                document.getElementById('spectator-connection-status').innerText = 'Layanan koneksi belum termuat.';
+                return;
+            }
+
+            peer = new Peer(undefined, { debug: 0 });
+
+            peer.on('open', () => {
+                viewerConnection = peer.connect(roomId, { reliable: true });
+
+                viewerConnection.on('open', () => {
+                    setViewerStatus(true);
+                });
+
+                viewerConnection.on('data', data => {
+                    if (data && data.type === 'scoreboard-state') {
+                        applyViewerState(data);
+                    }
+                });
+
+                viewerConnection.on('close', () => {
+                    setViewerStatus(false);
+                });
+
+                viewerConnection.on('error', () => {
+                    setViewerStatus(false);
+                });
+            });
+
+            peer.on('error', err => {
+                console.error('Viewer PeerJS:', err);
+                setViewerStatus(false);
+            });
+        }
+
+        function setViewerStatus(connected) {
+            const text = document.getElementById('spectator-connection-status');
+            const dot = document.getElementById('spectator-live-dot');
+
+            if (connected) {
+                text.innerText = 'LIVE • Terhubung ke operator';
+                dot.className = 'w-2 h-2 rounded-full bg-green-400 animate-pulse';
+            } else {
+                text.innerText = 'Terputus • Mencoba terhubung kembali...';
+                dot.className = 'w-2 h-2 rounded-full bg-red-400 animate-pulse';
+            }
+        }
+
+        function applyViewerState(state) {
+            document.getElementById('spectator-title').innerText = state.mainTitle || 'CERDAS CERMAT';
+            document.getElementById('spectator-subtitle').innerText = state.subTitle || '';
+
+            const leftLogo = document.getElementById('spectator-logo-left');
+            const rightLogo = document.getElementById('spectator-logo-right');
+            if (leftLogo && state.logoLeft) leftLogo.src = state.logoLeft;
+            if (rightLogo && state.logoRight) rightLogo.src = state.logoRight;
+
+            renderSpectatorTeams(state.teamNames || [], state.teamScores || []);
+
+            viewerTimerState.currentTime = Number(state.currentTime) || 0;
+            viewerTimerState.running = !!state.isTimerRunning;
+            viewerTimerState.receivedAt = Date.now();
+
+            updateViewerTimer();
+            startViewerTimerLoop();
+        }
+
+        function renderSpectatorTeams(names, scores) {
+            const container = document.getElementById('spectator-teams');
+            if (!container) return;
+
+            const colors = teamColors;
+
+            container.innerHTML = '';
+            const count = Math.min(names.length || 0, MAX_TEAMS);
+            for (let i = 0; i < count; i++) {
+                const c = colors[i % colors.length];
+                const card = document.createElement('div');
+                card.className = `rounded-3xl border-4 ${c[2]} bg-gradient-to-b ${c[1]} p-4 md:p-5 text-center shadow-2xl`;
+                card.innerHTML = `
+                    <div class="font-black text-xl md:text-2xl mb-3 truncate">${escapeHtml(names[i] || 'REGU ' + (i + 1))}</div>
+                    <div class="bg-black/80 rounded-2xl py-6 md:py-8 border border-white/10">
+                        <div class="font-digital text-5xl md:text-7xl font-black text-white text-glow-timer">${Number(scores[i] || 0)}</div>
+                    </div>
+                `;
+                container.appendChild(card);
+            }
+        }
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value;
+            return div.innerHTML;
+        }
+
+        function updateViewerTimer() {
+            const el = document.getElementById('spectator-timer');
+            if (!el) return;
+            const elapsed = viewerTimerState.running
+                ? Math.floor((Date.now() - viewerTimerState.receivedAt) / 1000)
+                : 0;
+            const shown = Math.max(0, viewerTimerState.currentTime - elapsed);
+            el.innerText = formatTime(shown);
+        }
+
+        function startViewerTimerLoop() {
+            if (viewerTimerInterval) return;
+            viewerTimerInterval = setInterval(() => {
+                if (viewerMode) updateViewerTimer();
+            }, 250);
+        }
+
+        // Inisialisasi setelah semua fungsi tersedia
+
+        // Initialize display on startup
+        window.onload = function() {
+            updateTimerDisplay();
+
+            // Bangun kartu regu sesuai jumlah regu yang aktif
+            renderTeams();
+            updateTeamCountUI();
+
+            // Izinkan Enter/Escape bekerja pada modal
+            const singleInput = document.getElementById('input-single-team-name');
+            if (singleInput) {
+                singleInput.addEventListener('keydown', function(event) {
+                    if (event.key === 'Enter') saveSingleTeam();
+                    if (event.key === 'Escape') closeModal('modal-edit-single-team');
+                });
+            }
+
+            // Jika URL memiliki ?room=..., otomatis masuk mode layar penonton.
+            const room = getRoomCode();
+            if (room) {
+                initViewerMode(room);
+            }
+        };
+    </script>
+</body>
+</html>
